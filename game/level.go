@@ -8,9 +8,25 @@ import (
 // Level defines a game level.
 type Level struct {
 	Name           string
-	Motions        []Motion
+	Motions        []Motion // new motions introduced in this level
 	Lines          []string
 	TargetsToHit   int
+}
+
+// CumulativeMotions returns all motions available at a given level index,
+// which is the union of motions from levels 0..index.
+func CumulativeMotions(levels []Level, index int) []Motion {
+	seen := make(map[Motion]bool)
+	var result []Motion
+	for i := 0; i <= index && i < len(levels); i++ {
+		for _, m := range levels[i].Motions {
+			if !seen[m] {
+				seen[m] = true
+				result = append(result, m)
+			}
+		}
+	}
+	return result
 }
 
 // AllLevels returns the level definitions for the game.
@@ -24,25 +40,25 @@ func AllLevels() []Level {
 		},
 		{
 			Name:         "Word Motions",
-			Motions:      []Motion{MotionH, MotionJ, MotionK, MotionL, MotionW, MotionB, MotionE},
+			Motions:      []Motion{MotionW, MotionB, MotionE},
 			Lines:        splitLines(level2Text),
 			TargetsToHit: 5,
 		},
 		{
 			Name:         "Line Motions",
-			Motions:      []Motion{MotionH, MotionJ, MotionK, MotionL, MotionW, MotionB, MotionZero, MotionDollar, MotionCaret, MotionGG, MotionBigG},
+			Motions:      []Motion{MotionZero, MotionDollar, MotionCaret, MotionGG, MotionBigG},
 			Lines:        splitLines(level3Text),
 			TargetsToHit: 6,
 		},
 		{
 			Name:         "Find Motions",
-			Motions:      []Motion{MotionH, MotionJ, MotionK, MotionL, MotionW, MotionB, MotionFChar, MotionBigFChar},
+			Motions:      []Motion{MotionFChar, MotionBigFChar},
 			Lines:        splitLines(level4Text),
 			TargetsToHit: 6,
 		},
 		{
 			Name:         "Mixed",
-			Motions:      []Motion{MotionH, MotionJ, MotionK, MotionL, MotionW, MotionB, MotionE, MotionZero, MotionDollar, MotionCaret, MotionGG, MotionBigG, MotionFChar, MotionBigFChar},
+			Motions:      []Motion{},
 			Lines:        splitLines(level5Text),
 			TargetsToHit: 8,
 		},

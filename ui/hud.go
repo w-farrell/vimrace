@@ -18,10 +18,10 @@ var (
 			Foreground(lipgloss.Color("75")).
 			Bold(true)
 
-	ratingPerfectStyle = lipgloss.NewStyle().Foreground(lipgloss.Color("46")).Bold(true)
-	ratingGreatStyle   = lipgloss.NewStyle().Foreground(lipgloss.Color("39")).Bold(true)
-	ratingGoodStyle    = lipgloss.NewStyle().Foreground(lipgloss.Color("220")).Bold(true)
-	ratingTryStyle     = lipgloss.NewStyle().Foreground(lipgloss.Color("196")).Bold(true)
+	medalDiamondStyle = lipgloss.NewStyle().Foreground(lipgloss.Color("51")).Bold(true)
+	medalGoldStyle    = lipgloss.NewStyle().Foreground(lipgloss.Color("220")).Bold(true)
+	medalSilverStyle  = lipgloss.NewStyle().Foreground(lipgloss.Color("252")).Bold(true)
+	medalBronzeStyle  = lipgloss.NewStyle().Foreground(lipgloss.Color("208")).Bold(true)
 
 	hintBoxStyle = lipgloss.NewStyle().
 			Border(lipgloss.RoundedBorder()).
@@ -36,6 +36,12 @@ var (
 	hintKeyStyle = lipgloss.NewStyle().
 			Foreground(lipgloss.Color("226")).
 			Bold(true)
+
+	hintKeyDimStyle = lipgloss.NewStyle().
+			Foreground(lipgloss.Color("241"))
+
+	hintDescDimStyle = lipgloss.NewStyle().
+			Foreground(lipgloss.Color("241"))
 )
 
 // RenderHUD renders the heads-up display bar.
@@ -49,19 +55,19 @@ func RenderHUD(levelNum int, levelName string, score, targetsHit, targetsTotal, 
 	return hudStyle.Render(strings.Join(parts, "  │  "))
 }
 
-// RenderRating renders the rating text with appropriate coloring.
-// ratingIndex: 0=Perfect, 1=Great, 2=Good, 3=TryAgain
-func RenderRating(ratingIndex int, text string) string {
-	switch ratingIndex {
+// RenderMedal renders the medal text with appropriate coloring.
+// medalIndex: 0=Diamond, 1=Gold, 2=Silver, 3=Bronze, 4=None
+func RenderMedal(medalIndex int, text string) string {
+	switch medalIndex {
 	case 0:
-		return ratingPerfectStyle.Render(text)
+		return medalDiamondStyle.Render(text)
 	case 1:
-		return ratingGreatStyle.Render(text)
+		return medalGoldStyle.Render(text)
 	case 2:
-		return ratingGoodStyle.Render(text)
+		return medalSilverStyle.Render(text)
 	case 3:
-		return ratingTryStyle.Render(text)
-	}
+		return medalBronzeStyle.Render(text)
+}
 	return text
 }
 
@@ -69,6 +75,7 @@ func RenderRating(ratingIndex int, text string) string {
 type HintItem struct {
 	Key         string
 	Description string
+	IsNew       bool
 }
 
 // RenderHints renders the available motions panel.
@@ -77,8 +84,13 @@ func RenderHints(hints []HintItem) string {
 	sb.WriteString(hintTitleStyle.Render("Available Motions"))
 	sb.WriteString("\n")
 	for _, h := range hints {
-		sb.WriteString(hintKeyStyle.Render(h.Key))
-		sb.WriteString("  " + h.Description + "\n")
+		if h.IsNew {
+			sb.WriteString(hintKeyStyle.Render(h.Key))
+			sb.WriteString("  " + h.Description + "\n")
+		} else {
+			sb.WriteString(hintKeyDimStyle.Render(h.Key))
+			sb.WriteString("  " + hintDescDimStyle.Render(h.Description) + "\n")
+		}
 	}
 	return hintBoxStyle.Render(sb.String())
 }

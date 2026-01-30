@@ -29,13 +29,45 @@ var (
 			Border(lipgloss.RoundedBorder()).
 			BorderForeground(lipgloss.Color("62")).
 			Padding(0, 1)
+
+	truncStyle = lipgloss.NewStyle().
+			Foreground(lipgloss.Color("241"))
 )
 
 // RenderBuffer renders the text buffer with cursor and target highlighting.
 // cursorRow/Col and targetRow/Col are the cursor and target positions.
-func RenderBuffer(lines []string, cursorRow, cursorCol, targetRow, targetCol int) string {
+// maxHeight limits the number of visible lines (0 = no limit).
+// maxWidth limits the border box width (0 = no limit).
+func RenderBuffer(lines []string, cursorRow, cursorCol, targetRow, targetCol, maxHeight, maxWidth int) string {
+	startLine := 0
+	endLine := len(lines)
+
+	if maxHeight > 0 && len(lines) > maxHeight {
+		// Center viewport on cursor
+		half := maxHeight / 2
+		startLine = cursorRow - half
+		if startLine < 0 {
+			startLine = 0
+		}
+		endLine = startLine + maxHeight
+		if endLine > len(lines) {
+			endLine = len(lines)
+			startLine = endLine - maxHeight
+			if startLine < 0 {
+				startLine = 0
+			}
+		}
+	}
+
 	var sb strings.Builder
-	for r, line := range lines {
+
+	if startLine > 0 {
+		sb.WriteString(truncStyle.Render(fmt.Sprintf("  ··· %d lines above ···", startLine)))
+		sb.WriteString("\n")
+	}
+
+	for r := startLine; r < endLine; r++ {
+		line := lines[r]
 		sb.WriteString(lineNumStyle.Render(fmt.Sprintf("%d", r+1)))
 		sb.WriteString("  ")
 
@@ -61,5 +93,15 @@ func RenderBuffer(lines []string, cursorRow, cursorCol, targetRow, targetCol int
 		}
 		sb.WriteString("\n")
 	}
-	return borderStyle.Render(sb.String())
+
+	if endLine < len(lines) {
+		sb.WriteString(truncStyle.Render(fmt.Sprintf("  ··· %d lines below ···", len(lines)-endLine)))
+		sb.WriteString("\n")
+	}
+
+	style := borderStyle
+	if maxWidth > 0 {
+		style = style.MaxWidth(maxWidth)
+	}
+	return style.Render(sb.String())
 }

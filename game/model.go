@@ -32,9 +32,11 @@ type Model struct {
 	Score       int
 	TargetsHit  int
 	Keystrokes  int
-	LastRating  Rating
-	ShowRating  bool
+	LastMedal   Medal
+	ShowMedal   bool
 	Parser      InputParser
+	Width       int
+	Height      int
 }
 
 // NewModel creates a new game model.
@@ -51,6 +53,11 @@ func (m Model) Init() tea.Cmd {
 
 func (m Model) Update(msg tea.Msg) (tea.Model, tea.Cmd) {
 	switch msg := msg.(type) {
+	case tea.WindowSizeMsg:
+		m.Width = msg.Width
+		m.Height = msg.Height
+		return m, nil
+
 	case tea.KeyMsg:
 		key := msg.String()
 
@@ -101,15 +108,13 @@ func (m *Model) startLevel() {
 	m.Cursor = Position{0, 0}
 	m.TargetsHit = 0
 	m.Keystrokes = 0
-	m.ShowRating = false
+	m.ShowMedal = false
 	m.Parser.Reset()
 	m.Target = GenerateTarget(m.Lines, m.Cursor, 3)
 	m.StartPos = m.Cursor
 }
 
 func (m Model) handlePlayingInput(key string) (tea.Model, tea.Cmd) {
-	level := m.Levels[m.LevelIndex]
-
 	result := m.Parser.Feed(key)
 	if !result.Consumed {
 		return m, nil
@@ -122,9 +127,9 @@ func (m Model) handlePlayingInput(key string) (tea.Model, tea.Cmd) {
 		return m, nil
 	}
 
-	// check if motion is allowed in this level
+	// check if motion is allowed using cumulative motions
 	allowed := false
-	for _, am := range level.Motions {
+	for _, am := range CumulativeMotions(m.Levels, m.LevelIndex) {
 		if am == result.Motion {
 			allowed = true
 			break
@@ -140,10 +145,10 @@ func (m Model) handlePlayingInput(key string) (tea.Model, tea.Cmd) {
 
 	// Check if target reached
 	if m.Cursor.Row == m.Target.Row && m.Cursor.Col == m.Target.Col {
-		optimal := OptimalKeystrokes(m.Lines, m.StartPos, m.Target)
-		m.LastRating = ComputeRating(m.Keystrokes, optimal)
-		m.Score += ScoreForRating(m.LastRating)
-		m.ShowRating = true
+		level := m.Levels[m.LevelIndex]
+		m.LastMedal = ComputeMedal(m.Keystrokes)
+		m.Score += ScoreForMedal(m.LastMedal)
+		m.ShowMedal = true
 		m.TargetsHit++
 
 		if m.TargetsHit >= level.TargetsToHit {
@@ -197,25 +202,59 @@ func (m Model) viewMenu() string {
 func (m Model) viewPlaying() string {
 	level := m.Levels[m.LevelIndex]
 
-	buffer := ui.RenderBuffer(m.Lines, m.Cursor.Row, m.Cursor.Col, m.Target.Row, m.Target.Col)
+	// Compute available height for buffer viewport
+	// Reserve lines for: HUD (1), medal line (1), footer (1), border padding (2), truncation indicators (2)
+	bufferMaxHeight := 0
+	bufferMaxWidth := 0
+	if m.Height > 0 {
+		overhead := 7 // HUD + medal + footer + border top/bottom + small margin
+		bufferMaxHeight = m.Height - overhead
+		if bufferMaxHeight < 3 {
+			bufferMaxHeight = 3
+		}
+	}
+	if m.Width > 0 {
+		bufferMaxWidth = m.Width - 34 // leave room for hints panel
+		if bufferMaxWidth < 30 {
+			bufferMaxWidth = m.Width
+		}
+	}
+
+	buffer := ui.RenderBuffer(m.Lines, m.Cursor.Row, m.Cursor.Col, m.Target.Row, m.Target.Col, bufferMaxHeight, bufferMaxWidth)
 	hud := ui.RenderHUD(m.LevelIndex+1, level.Name, m.Score, m.TargetsHit, level.TargetsToHit, m.Keystrokes)
 
-	hints := make([]ui.HintItem, len(level.Motions))
-	for i, mot := range level.Motions {
+	// Build hints with cumulative motions, marking new vs old
+	cumMotions := CumulativeMotions(m.Levels, m.LevelIndex)
+	newMotionSet := make(map[Motion]bool)
+	for _, mot := range level.Motions {
+		newMotionSet[mot] = true
+	}
+
+	hints := make([]ui.HintItem, len(cumMotions))
+	for i, mot := range cumMotions {
 		hints[i] = ui.HintItem{
 			Key:         MotionName(mot),
 			Description: motionDesc(mot),
+			IsNew:       newMotionSet[mot],
 		}
 	}
-	hintsPanel := ui.RenderHints(hints)
 
-	var ratingLine string
-	if m.ShowRating {
-		ratingLine = "  " + ui.RenderRating(int(m.LastRating), m.LastRating.String()) + "\n"
+	var medalLine string
+	if m.ShowMedal {
+		medalLine = "  " + ui.RenderMedal(int(m.LastMedal), m.LastMedal.String()) + "\n"
 	}
 
-	left := lipgloss.JoinVertical(lipgloss.Left, buffer, ratingLine, hud)
-	content := lipgloss.JoinHorizontal(lipgloss.Top, left, "  ", hintsPanel)
+	left := lipgloss.JoinVertical(lipgloss.Left, buffer, medalLine, hud)
+
+	// Only show hints panel if terminal is wide enough (need ~34 cols for it)
+	const hintsMinWidth = 70
+	var content string
+	if m.Width == 0 || m.Width >= hintsMinWidth {
+		hintsPanel := ui.RenderHints(hints)
+		content = lipgloss.JoinHorizontal(lipgloss.Top, left, "  ", hintsPanel)
+	} else {
+		content = left
+	}
 
 	footer := lipgloss.NewStyle().Foreground(lipgloss.Color("241")).Render("  ESC: menu")
 	return content + "\n" + footer + "\n"

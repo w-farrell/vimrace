@@ -1,61 +1,64 @@
 package game
 
-// Rating represents the player's performance on reaching a target.
-type Rating int
+// Medal represents the player's performance on reaching a target.
+type Medal int
 
 const (
-	RatingPerfect Rating = iota
-	RatingGreat
-	RatingGood
-	RatingTryAgain
+	MedalDiamond Medal = iota
+	MedalGold
+	MedalSilver
+	MedalBronze
 )
 
-func (r Rating) String() string {
-	switch r {
-	case RatingPerfect:
-		return "Perfect!"
-	case RatingGreat:
-		return "Great!"
-	case RatingGood:
-		return "Good"
-	case RatingTryAgain:
-		return "Try again..."
+// Medal keystroke thresholds (exclusive upper bounds).
+const (
+	ThresholdDiamond = 4 // < 4 keystrokes
+	ThresholdGold    = 6 // < 6 keystrokes
+	ThresholdSilver  = 8 // < 8 keystrokes
+)
+
+func (m Medal) String() string {
+	switch m {
+	case MedalDiamond:
+		return "Diamond!"
+	case MedalGold:
+		return "Gold!"
+	case MedalSilver:
+		return "Silver"
+	case MedalBronze:
+		return "Bronze"
 	default:
 		return ""
 	}
 }
 
-// ScoreForRating returns the score awarded for a given rating.
-func ScoreForRating(r Rating) int {
-	switch r {
-	case RatingPerfect:
+// ScoreForMedal returns the score awarded for a given medal.
+func ScoreForMedal(m Medal) int {
+	switch m {
+	case MedalDiamond:
+		return 200
+	case MedalGold:
 		return 150
-	case RatingGreat:
+	case MedalSilver:
 		return 100
-	case RatingGood:
+	case MedalBronze:
 		return 50
-	case RatingTryAgain:
-		return 10
 	default:
 		return 0
 	}
 }
 
-// ComputeRating compares actual keystrokes against the optimal count.
-func ComputeRating(actual, optimal int) Rating {
-	if optimal <= 0 {
-		optimal = 1
-	}
-	diff := actual - optimal
+// ComputeMedal determines the medal based on absolute keystroke count.
+func ComputeMedal(actual int) Medal {
 	switch {
-	case diff <= 0:
-		return RatingPerfect
-	case diff <= 2:
-		return RatingGreat
-	case diff <= 5:
-		return RatingGood
+	case actual < ThresholdDiamond:
+		return MedalDiamond
+	case actual < ThresholdGold:
+		return MedalGold
+	case actual < ThresholdSilver:
+		return MedalSilver
 	default:
-		return RatingTryAgain
+		return MedalBronze
 	}
 }
 
