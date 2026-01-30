@@ -45,12 +45,16 @@ var (
 )
 
 // RenderHUD renders the heads-up display bar.
-func RenderHUD(levelNum int, levelName string, score, targetsHit, targetsTotal, keystrokes int) string {
+func RenderHUD(levelNum int, levelName string, score, targetsHit, targetsTotal, keystrokes, pendingCount int) string {
 	parts := []string{
 		hudLabelStyle.Render("Level ") + fmt.Sprintf("%d — %s", levelNum, levelName),
 		hudLabelStyle.Render("Score: ") + fmt.Sprintf("%d", score),
 		hudLabelStyle.Render("Targets: ") + fmt.Sprintf("%d/%d", targetsHit, targetsTotal),
 		hudLabelStyle.Render("Keys: ") + fmt.Sprintf("%d", keystrokes),
+	}
+	if pendingCount > 0 {
+		countStyle := lipgloss.NewStyle().Foreground(lipgloss.Color("226")).Bold(true)
+		parts = append(parts, countStyle.Render(fmt.Sprintf("%d…", pendingCount)))
 	}
 	return hudStyle.Render(strings.Join(parts, "  │  "))
 }

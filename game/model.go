@@ -140,8 +140,27 @@ func (m Model) handlePlayingInput(key string) (tea.Model, tea.Cmd) {
 	}
 
 	m.Keystrokes++
-	newPos := ApplyMotion(m.Lines, m.Cursor, result.Motion, result.Char)
-	m.Cursor = newPos
+
+	count := result.Count
+	if count == 0 {
+		count = 1
+	}
+
+	// For gg/G with an explicit count, go to line N (1-indexed)
+	if result.Count > 0 && (result.Motion == MotionGG || result.Motion == MotionBigG) {
+		lineIdx := result.Count - 1
+		if lineIdx >= len(m.Lines) {
+			lineIdx = len(m.Lines) - 1
+		}
+		if lineIdx < 0 {
+			lineIdx = 0
+		}
+		m.Cursor = Position{Row: lineIdx, Col: 0}
+	} else {
+		for i := 0; i < count; i++ {
+			m.Cursor = ApplyMotion(m.Lines, m.Cursor, result.Motion, result.Char)
+		}
+	}
 
 	// Check if target reached
 	if m.Cursor.Row == m.Target.Row && m.Cursor.Col == m.Target.Col {
@@ -221,7 +240,7 @@ func (m Model) viewPlaying() string {
 	}
 
 	buffer := ui.RenderBuffer(m.Lines, m.Cursor.Row, m.Cursor.Col, m.Target.Row, m.Target.Col, bufferMaxHeight, bufferMaxWidth)
-	hud := ui.RenderHUD(m.LevelIndex+1, level.Name, m.Score, m.TargetsHit, level.TargetsToHit, m.Keystrokes)
+	hud := ui.RenderHUD(m.LevelIndex+1, level.Name, m.Score, m.TargetsHit, level.TargetsToHit, m.Keystrokes, m.Parser.Count)
 
 	// Build hints with cumulative motions, marking new vs old
 	cumMotions := CumulativeMotions(m.Levels, m.LevelIndex)

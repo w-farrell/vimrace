@@ -35,6 +35,7 @@ const (
 type InputParser struct {
 	State   InputState
 	FChar   rune // the character argument for f/F motions
+	Count   int  // accumulated count prefix (e.g., the 3 in 3j)
 }
 
 // ParseResult holds the result of parsing a keypress.
@@ -42,6 +43,7 @@ type ParseResult struct {
 	Motion   Motion
 	Char     rune // for f/F motions
 	Consumed bool // true if the key was consumed (even if motion is MotionNone, e.g. first 'g')
+	Count    int  // count prefix (0 means no count, i.e. do it once)
 }
 
 // Feed processes a single keypress and returns the resulting motion.
@@ -55,46 +57,70 @@ func (p *InputParser) Feed(key string) ParseResult {
 	switch p.State {
 	case InputPendingG:
 		p.State = InputReady
+		count := p.Count
+		p.Count = 0
 		if ch == 'g' {
-			return ParseResult{Motion: MotionGG, Consumed: true}
+			return ParseResult{Motion: MotionGG, Consumed: true, Count: count}
 		}
 		return ParseResult{Consumed: true}
 
 	case InputPendingF:
 		p.State = InputReady
 		p.FChar = ch
-		return ParseResult{Motion: MotionFChar, Char: ch, Consumed: true}
+		count := p.Count
+		p.Count = 0
+		return ParseResult{Motion: MotionFChar, Char: ch, Consumed: true, Count: count}
 
 	case InputPendingBigF:
 		p.State = InputReady
 		p.FChar = ch
-		return ParseResult{Motion: MotionBigFChar, Char: ch, Consumed: true}
+		count := p.Count
+		p.Count = 0
+		return ParseResult{Motion: MotionBigFChar, Char: ch, Consumed: true, Count: count}
 	}
 
 	// InputReady state
+
+	// Handle count prefix digits
+	if ch >= '1' && ch <= '9' && p.Count == 0 {
+		p.Count = int(ch - '0')
+		return ParseResult{Consumed: true}
+	}
+	if ch >= '0' && ch <= '9' && p.Count > 0 {
+		p.Count = p.Count*10 + int(ch-'0')
+		if p.Count > 99 {
+			p.Count = 99
+		}
+		return ParseResult{Consumed: true}
+	}
+
+	// Consume the accumulated count and attach it to the motion result
+	count := p.Count
+	p.Count = 0
+
 	switch ch {
 	case 'h':
-		return ParseResult{Motion: MotionH, Consumed: true}
+		return ParseResult{Motion: MotionH, Consumed: true, Count: count}
 	case 'j':
-		return ParseResult{Motion: MotionJ, Consumed: true}
+		return ParseResult{Motion: MotionJ, Consumed: true, Count: count}
 	case 'k':
-		return ParseResult{Motion: MotionK, Consumed: true}
+		return ParseResult{Motion: MotionK, Consumed: true, Count: count}
 	case 'l':
-		return ParseResult{Motion: MotionL, Consumed: true}
+		return ParseResult{Motion: MotionL, Consumed: true, Count: count}
 	case 'w':
-		return ParseResult{Motion: MotionW, Consumed: true}
+		return ParseResult{Motion: MotionW, Consumed: true, Count: count}
 	case 'b':
-		return ParseResult{Motion: MotionB, Consumed: true}
+		return ParseResult{Motion: MotionB, Consumed: true, Count: count}
 	case 'e':
-		return ParseResult{Motion: MotionE, Consumed: true}
+		return ParseResult{Motion: MotionE, Consumed: true, Count: count}
 	case '0':
-		return ParseResult{Motion: MotionZero, Consumed: true}
+		return ParseResult{Motion: MotionZero, Consumed: true, Count: count}
 	case '$':
-		return ParseResult{Motion: MotionDollar, Consumed: true}
+		return ParseResult{Motion: MotionDollar, Consumed: true, Count: count}
 	case '^':
-		return ParseResult{Motion: MotionCaret, Consumed: true}
+		return ParseResult{Motion: MotionCaret, Consumed: true, Count: count}
 	case 'G':
-		return ParseResult{Motion: MotionBigG, Consumed: true}
+		return ParseResult{Motion: MotionBigG, Consumed: true, Count: count}
 	case 'g':
 		p.State = InputPendingG
 		return ParseResult{Consumed: true}
@@ -106,6 +132,7 @@ func (p *InputParser) Feed(key string) ParseResult {
 		return ParseResult{Consumed: true}
 	}
 
+	p.Count = 0
 	return ParseResult{}
 }
 
@@ -113,6 +140,7 @@ func (p *InputParser) Feed(key string) ParseResult {
 func (p *InputParser) Reset() {
 	p.State = InputReady
 	p.FChar = 0
+	p.Count = 0
 }
 
 // MotionName returns a display string for a motion.
