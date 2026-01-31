@@ -41,7 +41,22 @@ var (
 			Foreground(lipgloss.Color("241"))
 
 	hintDescDimStyle = lipgloss.NewStyle().
-			Foreground(lipgloss.Color("241"))
+				Foreground(lipgloss.Color("241"))
+
+	modeInsertStyle = lipgloss.NewStyle().
+			Background(lipgloss.Color("28")).
+			Foreground(lipgloss.Color("15")).
+			Bold(true).
+			Padding(0, 1)
+
+	progressStyle = lipgloss.NewStyle().
+			Background(lipgloss.Color("236")).
+			Foreground(lipgloss.Color("252")).
+			Padding(0, 1)
+
+	targetProgressStyle = lipgloss.NewStyle().
+				Foreground(lipgloss.Color("252")).
+				Padding(0, 1)
 )
 
 // RenderHUD renders the heads-up display bar.
@@ -71,7 +86,7 @@ func RenderMedal(medalIndex int, text string) string {
 		return medalSilverStyle.Render(text)
 	case 3:
 		return medalBronzeStyle.Render(text)
-}
+	}
 	return text
 }
 
@@ -82,10 +97,10 @@ type HintItem struct {
 	IsNew       bool
 }
 
-// RenderHints renders the available motions panel.
+// RenderHints renders the available motions/commands panel.
 func RenderHints(hints []HintItem) string {
 	var sb strings.Builder
-	sb.WriteString(hintTitleStyle.Render("Available Motions"))
+	sb.WriteString(hintTitleStyle.Render("Available Commands"))
 	sb.WriteString("\n")
 	for _, h := range hints {
 		if h.IsNew {
@@ -97,4 +112,21 @@ func RenderHints(hints []HintItem) string {
 		}
 	}
 	return hintBoxStyle.Render(sb.String())
+}
+
+// RenderModeIndicator renders the vim mode indicator (e.g., "-- INSERT --").
+func RenderModeIndicator(mode string) string {
+	return modeInsertStyle.Render("  -- " + mode + " --  ")
+}
+
+// RenderLessonProgress renders lesson and exercise progress.
+func RenderLessonProgress(lessonNum int, lessonName string, exNum, totalEx int) string {
+	text := fmt.Sprintf("Lesson %d: %s  │  Exercise %d/%d", lessonNum, lessonName, exNum, totalEx)
+	return progressStyle.Render(text)
+}
+
+// RenderTargetProgress renders the target hit count and keystroke count for motion exercises.
+func RenderTargetProgress(targetsHit, targetsTotal, keystrokes int) string {
+	text := fmt.Sprintf("  Targets: %d/%d  │  Keystrokes: %d", targetsHit, targetsTotal, keystrokes)
+	return targetProgressStyle.Render(text)
 }

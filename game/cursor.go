@@ -73,7 +73,7 @@ func ApplyMotion(lines []string, pos Position, motion Motion, char rune) Positio
 		pos.Col = 0
 		return clamp(pos)
 	case MotionW:
-		return moveWord(lines, pos, true)
+		return moveWord(lines, pos)
 	case MotionB:
 		return moveWordBack(lines, pos)
 	case MotionE:
@@ -92,7 +92,7 @@ func isWordChar(ch byte) bool {
 	return unicode.IsLetter(r) || unicode.IsDigit(r) || r == '_'
 }
 
-func moveWord(lines []string, pos Position, forward bool) Position {
+func moveWord(lines []string, pos Position) Position {
 	row, col := pos.Row, pos.Col
 	line := lines[row]
 
@@ -274,9 +274,3 @@ func findCharBackward(lines []string, pos Position, ch rune) Position {
 	return pos
 }
 
-func max(a, b int) int {
-	if a > b {
-		return a
-	}
-	return b
-}

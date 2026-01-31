@@ -32,10 +32,29 @@ var (
 
 	truncStyle = lipgloss.NewStyle().
 			Foreground(lipgloss.Color("241"))
+
+	goalLineNumStyle = lipgloss.NewStyle().
+				Foreground(lipgloss.Color("239")).
+				Width(4).
+				Align(lipgloss.Right)
+
+	goalTextStyle = lipgloss.NewStyle().
+			Foreground(lipgloss.Color("243"))
+
+	goalBorderStyle = lipgloss.NewStyle().
+			Border(lipgloss.RoundedBorder()).
+			BorderForeground(lipgloss.Color("241")).
+			Padding(0, 1)
+
+	goalTitleStyle = lipgloss.NewStyle().
+			Foreground(lipgloss.Color("241")).
+			Bold(true)
+
 )
 
 // RenderBuffer renders the text buffer with cursor and target highlighting.
 // cursorRow/Col and targetRow/Col are the cursor and target positions.
+// Pass -1 for targetRow/Col to hide the target highlight.
 // maxHeight limits the number of visible lines (0 = no limit).
 // maxWidth limits the border box width (0 = no limit).
 func RenderBuffer(lines []string, cursorRow, cursorCol, targetRow, targetCol, maxHeight, maxWidth int) string {
@@ -100,6 +119,43 @@ func RenderBuffer(lines []string, cursorRow, cursorCol, targetRow, targetCol, ma
 	}
 
 	style := borderStyle
+	if maxWidth > 0 {
+		style = style.MaxWidth(maxWidth)
+	}
+	return style.Render(sb.String())
+}
+
+// RenderGoalBuffer renders a read-only goal buffer with dimmed styling and no cursor.
+func RenderGoalBuffer(lines []string, maxHeight, maxWidth int) string {
+	startLine := 0
+	endLine := len(lines)
+
+	if maxHeight > 0 && len(lines) > maxHeight {
+		endLine = maxHeight
+		if endLine > len(lines) {
+			endLine = len(lines)
+		}
+	}
+
+	var sb strings.Builder
+
+	sb.WriteString(goalTitleStyle.Render("Goal"))
+	sb.WriteString("\n")
+
+	for r := startLine; r < endLine; r++ {
+		line := lines[r]
+		sb.WriteString(goalLineNumStyle.Render(fmt.Sprintf("%d", r+1)))
+		sb.WriteString("  ")
+		sb.WriteString(goalTextStyle.Render(line))
+		sb.WriteString("\n")
+	}
+
+	if endLine < len(lines) {
+		sb.WriteString(truncStyle.Render(fmt.Sprintf("  ··· %d lines below ···", len(lines)-endLine)))
+		sb.WriteString("\n")
+	}
+
+	style := goalBorderStyle
 	if maxWidth > 0 {
 		style = style.MaxWidth(maxWidth)
 	}
