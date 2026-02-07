@@ -4,7 +4,7 @@ stages:
   - release
 
 variables:
-  GO_VERSION: "1.21"
+  GO_VERSION: "1.25.4"
 
 # Run tests
 test:
