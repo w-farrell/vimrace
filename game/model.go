@@ -123,13 +123,24 @@ func (m Model) Update(msg tea.Msg) (tea.Model, tea.Cmd) {
 
 		case StateExerciseComplete:
 			if key == "enter" {
-				lesson := m.Lessons[m.LessonIndex]
-				m.ExIndex++
-				if m.ExIndex >= len(lesson.Exercises) {
-					m.State = StateLevelComplete
+				if m.GameMode == GameModeMotionChallenge {
+					level := m.Levels[m.LevelIndex]
+					m.ExIndex++
+					if m.ExIndex >= len(level.Exercises) {
+						m.State = StateLevelComplete
+					} else {
+						m.State = StatePlaying
+						m.startChallengeLevel()
+					}
 				} else {
-					m.State = StatePlaying
-					m.startExercise()
+					lesson := m.Lessons[m.LessonIndex]
+					m.ExIndex++
+					if m.ExIndex >= len(lesson.Exercises) {
+						m.State = StateLevelComplete
+					} else {
+						m.State = StatePlaying
+						m.startExercise()
+					}
 				}
 			}
 
@@ -145,6 +156,7 @@ func (m Model) Update(msg tea.Msg) (tea.Model, tea.Cmd) {
 					}
 				} else {
 					m.LevelIndex++
+					m.ExIndex = 0
 					if m.LevelIndex >= len(m.Levels) {
 						m.State = StateGameOver
 					} else {
@@ -176,6 +188,7 @@ func (m Model) handleMenuInput(key string) (tea.Model, tea.Cmd) {
 	case "2", "c":
 		m.GameMode = GameModeMotionChallenge
 		m.LevelIndex = 0
+		m.ExIndex = 0
 		m.Score = 0
 		m.State = StatePlaying
 		m.startChallengeLevel()
@@ -210,18 +223,27 @@ func (m Model) handleTutorialMenuInput(key string) (tea.Model, tea.Cmd) {
 
 func (m *Model) startChallengeLevel() {
 	level := m.Levels[m.LevelIndex]
-	m.Lines = level.Lines
-	m.Buffer = NewBuffer(level.Lines)
-	m.Cursor = Position{0, 0}
-	m.DesiredCol = 0
-	m.TargetsHit = 0
+	ex := level.Exercises[m.ExIndex]
+
+	m.Buffer = NewBuffer(ex.InitBuffer)
+	m.Lines = m.Buffer.Lines
+	m.Cursor = ex.StartCursor
+	m.DesiredCol = ex.StartCursor.Col
 	m.Keystrokes = 0
 	m.ShowMedal = false
 	m.VimMode = ModeNormal
 	m.Parser.Reset()
-	m.GoalLines = nil
-	m.Target = GenerateTarget(m.Lines, m.Cursor, 3)
-	m.StartPos = m.Cursor
+	m.Undo.Reset()
+
+	if ex.Type == ExerciseMotion {
+		m.GoalLines = nil
+		m.TargetsHit = 0
+		m.Target = GenerateTarget(m.Buffer.Lines, m.Cursor, 3)
+		m.StartPos = m.Cursor
+	} else {
+		m.GoalLines = ex.GoalBuffer
+		m.Target = Position{-1, -1}
+	}
 }
 
 func (m *Model) startExercise() {
@@ -306,20 +328,6 @@ func (m Model) handlePlayingInput(key string) (tea.Model, tea.Cmd) {
 
 // handleMotion processes cursor motion (existing behavior preserved).
 func (m Model) handleMotion(result ParseResult) (tea.Model, tea.Cmd) {
-	// In challenge mode, check if motion is allowed
-	if m.GameMode == GameModeMotionChallenge {
-		allowed := false
-		for _, am := range CumulativeMotions(m.Levels, m.LevelIndex) {
-			if am == result.Motion {
-				allowed = true
-				break
-			}
-		}
-		if !allowed {
-			return m, nil
-		}
-	}
-
 	m.Keystrokes++
 
 	count := result.Count
@@ -378,18 +386,15 @@ func (m Model) handleTargetReached() (tea.Model, tea.Cmd) {
 
 	var totalTargets int
 	if m.GameMode == GameModeMotionChallenge {
-		totalTargets = m.Levels[m.LevelIndex].TargetsToHit
+		ex := m.Levels[m.LevelIndex].Exercises[m.ExIndex]
+		totalTargets = ex.NumTargets
 	} else {
 		ex := m.Lessons[m.LessonIndex].Exercises[m.ExIndex]
 		totalTargets = ex.NumTargets
 	}
 
 	if m.TargetsHit >= totalTargets {
-		if m.GameMode == GameModeMotionChallenge {
-			m.State = StateLevelComplete
-		} else {
-			m.State = StateExerciseComplete
-		}
+		m.State = StateExerciseComplete
 	} else {
 		m.Keystrokes = 0
 		m.ShowMedal = false
@@ -569,7 +574,7 @@ func (m Model) viewMenu() string {
 
 	options := "\n" +
 		"  " + optionKeyStyle.Render("1") + optionStyle.Render("  Tutorial       — Learn vim commands step by step") + "\n" +
-		"  " + optionKeyStyle.Render("2") + optionStyle.Render("  Challenges     — Motion target practice") + "\n\n" +
+		"  " + optionKeyStyle.Render("2") + optionStyle.Render("  Challenges     — Practice all commands") + "\n\n" +
 		subtitleStyle.Render("  Press number to select  •  q to quit") + "\n"
 
 	return lipgloss.JoinVertical(lipgloss.Left, title, "", "  "+sub, options)
@@ -642,60 +647,111 @@ func (m Model) viewPlaying() string {
 
 func (m Model) viewPlayingChallenge() string {
 	level := m.Levels[m.LevelIndex]
+	ex := level.Exercises[m.ExIndex]
 
 	bufferMaxHeight := 0
 	bufferMaxWidth := 0
 	if m.Height > 0 {
-		overhead := 7
+		overhead := 9
 		bufferMaxHeight = m.Height - overhead
 		if bufferMaxHeight < 3 {
 			bufferMaxHeight = 3
 		}
 	}
+
+	isEditExercise := ex.Type == ExerciseEdit
+
 	if m.Width > 0 {
-		bufferMaxWidth = m.Width - 34
-		if bufferMaxWidth < 30 {
-			bufferMaxWidth = m.Width
+		if isEditExercise && m.Width >= 70 {
+			bufferMaxWidth = (m.Width - 6) / 2
+		} else {
+			bufferMaxWidth = m.Width - 34
+			if bufferMaxWidth < 30 {
+				bufferMaxWidth = m.Width
+			}
 		}
 	}
 
-	buffer := ui.RenderBuffer(m.Buffer.Lines, m.Cursor.Row, m.Cursor.Col, m.Target.Row, m.Target.Col, bufferMaxHeight, bufferMaxWidth)
-	hud := ui.RenderHUD(m.LevelIndex+1, level.Name, m.Score, m.TargetsHit, level.TargetsToHit, m.Keystrokes, m.Parser.Count)
+	// Instruction line
+	instrStyle := lipgloss.NewStyle().
+		Foreground(lipgloss.Color("252")).
+		Bold(true).
+		Padding(0, 1)
+	instruction := instrStyle.Render(ex.Instruction)
 
-	// Build hints with cumulative motions
-	cumMotions := CumulativeMotions(m.Levels, m.LevelIndex)
-	newMotionSet := make(map[Motion]bool)
-	for _, mot := range level.Motions {
-		newMotionSet[mot] = true
+	// Active buffer
+	targetRow, targetCol := m.Target.Row, m.Target.Col
+	if isEditExercise {
+		targetRow, targetCol = -1, -1
 	}
+	buffer := ui.RenderBuffer(m.Buffer.Lines, m.Cursor.Row, m.Cursor.Col, targetRow, targetCol, bufferMaxHeight, bufferMaxWidth)
 
-	hints := make([]ui.HintItem, len(cumMotions))
-	for i, mot := range cumMotions {
-		hints[i] = ui.HintItem{
-			Key:         MotionName(mot),
-			Description: motionDesc(mot),
-			IsNew:       newMotionSet[mot],
-		}
-	}
-
+	// Medal line
 	var medalLine string
 	if m.ShowMedal {
-		medalLine = "  " + ui.RenderMedal(int(m.LastMedal), m.LastMedal.String()) + "\n"
+		medalLine = "  " + ui.RenderMedal(int(m.LastMedal), m.LastMedal.String())
 	}
 
-	left := lipgloss.JoinVertical(lipgloss.Left, buffer, medalLine, hud)
+	// Mode indicator
+	modeIndicator := ""
+	if m.VimMode == ModeInsert {
+		modeIndicator = ui.RenderModeIndicator("INSERT")
+	}
 
-	const hintsMinWidth = 70
-	var content string
-	if m.Width == 0 || m.Width >= hintsMinWidth {
-		hintsPanel := ui.RenderHints(hints)
-		content = lipgloss.JoinHorizontal(lipgloss.Top, left, "  ", hintsPanel)
+	// Build hints from level commands
+	hints := make([]ui.HintItem, len(level.Commands))
+	for i, cmd := range level.Commands {
+		hints[i] = ui.HintItem{
+			Key:         cmd,
+			Description: commandDesc(cmd),
+			IsNew:       true,
+		}
+	}
+
+	// Target/exercise progress
+	var targetInfo string
+	if ex.Type == ExerciseMotion {
+		targetInfo = ui.RenderTargetProgress(m.TargetsHit, ex.NumTargets, m.Keystrokes)
+	}
+
+	// Exercise progress within level
+	totalEx := len(level.Exercises)
+	progress := ui.RenderChallengeProgress(m.LevelIndex+1, level.Name, m.ExIndex+1, totalEx, m.Score)
+
+	var mainContent string
+
+	if isEditExercise && m.GoalLines != nil && (m.Width == 0 || m.Width >= 70) {
+		goalBuffer := ui.RenderGoalBuffer(m.GoalLines, bufferMaxHeight, bufferMaxWidth)
+		mainContent = lipgloss.JoinHorizontal(lipgloss.Top, buffer, "  ", goalBuffer)
+	} else if isEditExercise && m.GoalLines != nil {
+		goalBuffer := ui.RenderGoalBuffer(m.GoalLines, bufferMaxHeight, bufferMaxWidth)
+		mainContent = lipgloss.JoinVertical(lipgloss.Left, buffer, goalBuffer)
 	} else {
-		content = left
+		// Motion exercise — show hints panel
+		hintsPanel := ui.RenderHints(hints)
+		if m.Width == 0 || m.Width >= 70 {
+			mainContent = lipgloss.JoinHorizontal(lipgloss.Top, buffer, "  ", hintsPanel)
+		} else {
+			mainContent = buffer
+		}
 	}
+
+	parts := []string{instruction, mainContent}
+	if medalLine != "" {
+		parts = append(parts, medalLine)
+	}
+	if targetInfo != "" {
+		parts = append(parts, targetInfo)
+	}
+	if modeIndicator != "" {
+		parts = append(parts, modeIndicator)
+	}
+	parts = append(parts, progress)
 
 	footer := lipgloss.NewStyle().Foreground(lipgloss.Color("241")).Render("  ESC: menu")
-	return content + "\n" + footer + "\n"
+	parts = append(parts, footer)
+
+	return lipgloss.JoinVertical(lipgloss.Left, parts...) + "\n"
 }
 
 func (m Model) viewPlayingTutorial() string {
@@ -829,19 +885,27 @@ func (m Model) buildTutorialHints() []ui.HintItem {
 }
 
 func (m Model) viewExerciseComplete() string {
-	lesson := m.Lessons[m.LessonIndex]
-
 	style := lipgloss.NewStyle().
 		Bold(true).
 		Foreground(lipgloss.Color("46")).
 		Padding(1, 2)
 
+	var totalEx int
+	var completeLabel string
+	if m.GameMode == GameModeMotionChallenge {
+		totalEx = len(m.Levels[m.LevelIndex].Exercises)
+		completeLabel = "complete the level"
+	} else {
+		totalEx = len(m.Lessons[m.LessonIndex].Exercises)
+		completeLabel = "complete the lesson"
+	}
+
 	var sb strings.Builder
-	sb.WriteString(fmt.Sprintf("Exercise %d/%d Complete!\n\n", m.ExIndex+1, len(lesson.Exercises)))
-	if m.ExIndex+1 < len(lesson.Exercises) {
+	sb.WriteString(fmt.Sprintf("Exercise %d/%d Complete!\n\n", m.ExIndex+1, totalEx))
+	if m.ExIndex+1 < totalEx {
 		sb.WriteString("Press Enter for next exercise")
 	} else {
-		sb.WriteString("Press Enter to complete the lesson")
+		sb.WriteString("Press Enter to " + completeLabel)
 	}
 
 	return style.Render(sb.String())
@@ -865,7 +929,7 @@ func (m Model) viewLevelComplete() string {
 	} else {
 		level := m.Levels[m.LevelIndex]
 		sb.WriteString(fmt.Sprintf("Level %d Complete — %s\n\n", m.LevelIndex+1, level.Name))
-		sb.WriteString(fmt.Sprintf("Score: %d\n\n", m.Score))
+		sb.WriteString(fmt.Sprintf("Exercises: %d  |  Score: %d\n\n", len(level.Exercises), m.Score))
 		if m.LevelIndex+1 < len(m.Levels) {
 			sb.WriteString("Press Enter for next level")
 		} else {

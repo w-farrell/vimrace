@@ -130,3 +130,9 @@ func RenderTargetProgress(targetsHit, targetsTotal, keystrokes int) string {
 	text := fmt.Sprintf("  Targets: %d/%d  │  Keystrokes: %d", targetsHit, targetsTotal, keystrokes)
 	return targetProgressStyle.Render(text)
 }
+
+// RenderChallengeProgress renders level and exercise progress for challenge mode.
+func RenderChallengeProgress(levelNum int, levelName string, exNum, totalEx, score int) string {
+	text := fmt.Sprintf("Level %d: %s  │  Exercise %d/%d  │  Score: %d", levelNum, levelName, exNum, totalEx, score)
+	return progressStyle.Render(text)
+}

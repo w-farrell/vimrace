@@ -18,18 +18,18 @@ build:
   stage: build
   image: golang:${GO_VERSION}
   script:
-    - go build -o myapp
+    - go build -o vimgame
   artifacts:
     paths:
-      - myapp
+      - vimgame
     expire_in: 1 week
 
 # Release with GoReleaser (only on tags)
 release:
   stage: release
   image: goreleaser/goreleaser:latest
-  only:
-    - tags
+  rules:
+    - if: $CI_COMMIT_TAG =~ /^v\d+\.\d+\.\d+/
   script:
     - goreleaser release --clean
   variables:

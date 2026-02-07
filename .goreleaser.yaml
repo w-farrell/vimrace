@@ -46,6 +46,9 @@ changelog:
       - "^test:"
 
 release:
+  gitlab:
+    owner: willfarrell
+    name: vimgame
   footer: >-
 
     ---
